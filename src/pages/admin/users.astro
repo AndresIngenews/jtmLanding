@@ -1,0 +1,149 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { setFlash, takeFlash, type Flash } from '../../lib/flash';
+import { UserError, createUser, listUsers, resetPassword, setActive } from '../../lib/users';
+
+const me = Astro.locals.user!;
+// Lo escrito en "Add an admin" se conserva si hay un error (salvo las contraseñas)
+let draft = { username: '', name: '', email: '' };
+let flash: Flash | null = null;
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const action = String(form.get('action') ?? '');
+  const id = Number(form.get('id'));
+  const field = (name: string) => String(form.get(name) ?? '');
+
+  try {
+    if (action === 'create') {
+      draft = { username: field('username'), name: field('name'), email: field('email') };
+      const username = await createUser({ ...draft, password: field('password'), confirm: field('confirm') });
+      setFlash(Astro.cookies, 'ok', `Admin "${username}" created. They can now sign in at /admin.`);
+    } else if (action === 'deactivate' || action === 'activate') {
+      const username = await setActive(id, action === 'activate', me.id);
+      setFlash(Astro.cookies, 'ok', action === 'activate' ? `"${username}" can sign in again.` : `"${username}" was deactivated and signed out.`);
+    } else if (action === 'reset') {
+      const username = await resetPassword(id, field('password'), field('confirm'), me.id);
+      setFlash(Astro.cookies, 'ok', `New password set for "${username}". Share it with them privately.`);
+    }
+    return Astro.redirect('/admin/users', 303);
+  } catch (err) {
+    if (!(err instanceof UserError)) {
+      console.error(err);
+      flash = { type: 'err', text: 'The operation could not be completed.' };
+    } else if (action === 'create') {
+      // Error al crear: se muestra en la misma página para no perder lo escrito
+      flash = { type: 'err', text: err.message };
+      Astro.response.status = 422;
+    } else {
+      setFlash(Astro.cookies, 'err', err.message);
+      return Astro.redirect('/admin/users', 303);
+    }
+  }
+}
+
+flash ??= takeFlash(Astro.cookies);
+const users = await listUsers();
+const fmt = new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
+---
+
+<AdminLayout title="Admins" flash={flash}>
+  <div class="page-head">
+    <div>
+      <h1>Admins</h1>
+      <p>Everyone listed here can sign in and edit the whole site. All admins have the same permissions.</p>
+    </div>
+  </div>
+
+  <form class="card" method="post" style="max-width:640px" data-add-admin>
+    <input type="hidden" name="action" value="create" />
+    <h2 style="font-size:18px;margin-bottom:16px">Add an admin</h2>
+    <div class="field">
+      <label for="username">Username</label>
+      <input id="username" name="username" type="text" required minlength="3" maxlength="60" pattern="[A-Za-z0-9._\-]{3,60}" autocomplete="off" value={draft.username} />
+      <span class="help">What they type to sign in. 3–60 characters: letters, numbers, dots, dashes or underscores.</span>
+    </div>
+    <div class="field">
+      <label for="name">Full name</label>
+      <input id="name" name="name" type="text" maxlength="120" value={draft.name} />
+      <span class="help">Shown in the panel and in the change history.</span>
+    </div>
+    <div class="field">
+      <label for="email">Email (optional)</label>
+      <input id="email" name="email" type="email" maxlength="190" value={draft.email} />
+    </div>
+    <div class="field">
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" required minlength="10" autocomplete="new-password" />
+      <span class="help">At least 10 characters, mixing letters and numbers. Share it with the new admin privately; they can change it in My account.</span>
+    </div>
+    <div class="field">
+      <label for="confirm">Confirm password</label>
+      <input id="confirm" name="confirm" type="password" required minlength="10" autocomplete="new-password" />
+    </div>
+    <button class="btn" type="submit">Create admin</button>
+  </form>
+
+  <div class="card" style="overflow-x:auto;margin-top:24px">
+    <h2 style="font-size:18px;margin-bottom:12px">All admins ({users.length})</h2>
+    <table class="table" data-admins>
+      <thead>
+        <tr>
+          <th>Username</th>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Status</th>
+          <th>Last sign-in</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {
+          users.map((u) => {
+            const isMe = u.id === me.id;
+            return (
+              <tr style={u.is_active ? undefined : 'opacity:.6'}>
+                <td>
+                  <strong>{u.username}</strong>
+                  {isMe && <span class="help"> (you)</span>}
+                </td>
+                <td>{u.name || '—'}</td>
+                <td>{u.email || '—'}</td>
+                <td>{u.is_active ? 'Active' : 'Deactivated'}</td>
+                <td style="white-space:nowrap">{u.last_login_at ? fmt.format(new Date(u.last_login_at)) : 'Never'}</td>
+                <td>
+                  {isMe ? (
+                    <a href="/admin/account">Change my password</a>
+                  ) : (
+                    <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-start">
+                      <form
+                        method="post"
+                        data-confirm={u.is_active ? `Deactivate "${u.username}"? They will be signed out and unable to sign in.` : `Let "${u.username}" sign in again?`}
+                      >
+                        <input type="hidden" name="id" value={u.id} />
+                        <input type="hidden" name="action" value={u.is_active ? 'deactivate' : 'activate'} />
+                        <button class={`btn btn--small ${u.is_active ? 'btn--danger' : 'btn--ghost'}`} type="submit">
+                          {u.is_active ? 'Deactivate' : 'Activate'}
+                        </button>
+                      </form>
+                      <details>
+                        <summary>Set a new password</summary>
+                        <form method="post" style="display:flex;flex-direction:column;gap:8px;margin-top:8px;min-width:220px">
+                          <input type="hidden" name="id" value={u.id} />
+                          <input type="hidden" name="action" value="reset" />
+                          <input type="password" name="password" placeholder="New password" required minlength="10" autocomplete="new-password" aria-label={`New password for ${u.username}`} />
+                          <input type="password" name="confirm" placeholder="Confirm new password" required minlength="10" autocomplete="new-password" aria-label="Confirm new password" />
+                          <button class="btn btn--small" type="submit">Save password</button>
+                        </form>
+                      </details>
+                    </div>
+                  )}
+                </td>
+              </tr>
+            );
+          })
+        }
+      </tbody>
+    </table>
+  </div>
+</AdminLayout>

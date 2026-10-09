@@ -33,6 +33,7 @@ const current = (href: string) => (path === href ? 'page' : undefined);
           <span class="sidebar__label">Tools</span>
           <a href="/admin/media" aria-current={current('/admin/media')}>Images</a>
           <a href="/admin/history" aria-current={current('/admin/history')}>History</a>
+          <a href="/admin/users" aria-current={current('/admin/users')}>Admins</a>
           <a href="/admin/account" aria-current={current('/admin/account')}>My account</a>
           <a href="/" target="_blank" rel="noopener">View site ↗</a>
         </nav>

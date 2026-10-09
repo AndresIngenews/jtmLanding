@@ -13,7 +13,7 @@ Landing en **Astro 7 (SSR, adaptador Node)** con panel de administración para e
 npm install
 cp .env.example .env              # y ajusta las credenciales de MySQL
 npm run db:setup                  # crea las tablas y carga los textos del diseño
-npm run admin:create              # crea un administrador (o resetea su contraseña)
+npm run admin:create              # crea el primer administrador (los demás, desde Admin → Admins)
 npm run dev                       # http://localhost:4321  ·  admin: /admin
 ```
 
@@ -38,9 +38,10 @@ src/lib/content-schema.ts     ★ Todos los campos editables (clave, tipo, valor
 src/lib/content.ts            Lectura/guardado de contenido + historial
 src/lib/auth.ts               Login, sesiones, bloqueo por intentos fallidos
 src/lib/media.ts              Subida y optimización de imágenes (sharp → WebP)
+src/lib/users.ts              Alta, desactivación y cambio de contraseña de administradores
 src/middleware.ts             Protege /admin/*
 src/pages/index.astro         La landing (11 secciones del diseño)
-src/pages/admin/              Panel: secciones, imágenes, historial, cuenta
+src/pages/admin/              Panel: secciones, imágenes, historial, admins, cuenta
 src/pages/uploads/[file].ts   Sirve las imágenes subidas
 ```
 
