@@ -1115,6 +1115,7 @@ a:focus-visible {
   }
 
   /* Textos de introducción junto a un título */
+  .idea .body-copy,
   .ways__intro,
   .formula__intro,
   .reach .body-copy,
@@ -1128,9 +1129,13 @@ a:focus-visible {
     width: 100%;
   }
 
-  /* Botones y enlaces */
+  /* Botones y enlaces (el texto de un botón que ocupa dos líneas también va centrado) */
   .cta-row {
     justify-content: center;
+  }
+  .btn,
+  .link {
+    text-align: center;
   }
   .audit .btn,
   .about .link {
@@ -1142,6 +1147,14 @@ a:focus-visible {
   .final__copy {
     align-items: center;
     text-align: center;
+  }
+
+  /* Pilares de la fórmula: título y texto de cada uno */
+  .formula__pillar {
+    text-align: center;
+  }
+  .formula__pillar p {
+    margin-inline: auto;
   }
 
   /* Sección JT Maison: logo + título */
