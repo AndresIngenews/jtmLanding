@@ -1,0 +1,53 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { SESSION_COOKIE, changePassword, destroyOtherSessions } from '../../lib/auth';
+import { setFlash, takeFlash } from '../../lib/flash';
+
+const user = Astro.locals.user!;
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const current = String(form.get('current') ?? '');
+  const next = String(form.get('next') ?? '');
+  const confirm = String(form.get('confirm') ?? '');
+
+  const error = next !== confirm ? 'The new passwords do not match.' : await changePassword(user.id, current, next);
+  if (error) {
+    setFlash(Astro.cookies, 'err', error);
+  } else {
+    await destroyOtherSessions(user.id, Astro.cookies.get(SESSION_COOKIE)?.value);
+    setFlash(Astro.cookies, 'ok', 'Password updated. All other sessions have been signed out.');
+  }
+  return Astro.redirect('/admin/account', 303);
+}
+
+const flash = takeFlash(Astro.cookies);
+---
+
+<AdminLayout title="My account" flash={flash}>
+  <div class="page-head">
+    <div>
+      <h1>My account</h1>
+      <p>
+        Username: <strong>{user.username}</strong>{user.email && ` · ${user.email}`}
+      </p>
+    </div>
+  </div>
+  <form class="card" method="post" style="max-width:520px">
+    <h2 style="font-size:18px;margin-bottom:16px">Change password</h2>
+    <div class="field">
+      <label for="current">Current password</label>
+      <input id="current" name="current" type="password" autocomplete="current-password" required />
+    </div>
+    <div class="field">
+      <label for="next">New password</label>
+      <input id="next" name="next" type="password" autocomplete="new-password" minlength="10" required />
+      <span class="help">At least 10 characters, mixing letters and numbers.</span>
+    </div>
+    <div class="field">
+      <label for="confirm">Confirm new password</label>
+      <input id="confirm" name="confirm" type="password" autocomplete="new-password" minlength="10" required />
+    </div>
+    <button class="btn" type="submit">Update password</button>
+  </form>
+</AdminLayout>

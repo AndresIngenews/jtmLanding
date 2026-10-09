@@ -1,0 +1,14 @@
+---
+// Texto con párrafos: cada bloque separado por una línea en blanco es un <p>.
+import { toParagraphs } from '../lib/content';
+import Lines from './Lines.astro';
+
+interface Props {
+  text: string;
+  class?: string;
+}
+const { text, class: className } = Astro.props;
+---
+{toParagraphs(text).map((lines) => (
+  <p class={className}><Lines text={lines.join('\n')} /></p>
+))}

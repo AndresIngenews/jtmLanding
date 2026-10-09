@@ -1,0 +1,385 @@
+---
+import '@fontsource/bodoni-moda/500.css';
+import '@fontsource/bodoni-moda/600.css';
+import '@fontsource/bodoni-moda/500-italic.css';
+import '../styles/landing.css';
+import Lines from '../components/Lines.astro';
+import Prose from '../components/Prose.astro';
+import { getContent } from '../lib/content';
+import { resolveHref } from '../lib/content-schema';
+
+const c = await getContent();
+// Cada botón tiene su propio destino (enlace general @clave o URL propia).
+// Los enlaces a otros dominios se abren en una pestaña nueva.
+const link = (key: string) => {
+  const href = resolveHref(c, c[key]);
+  let external = false;
+  try {
+    external = /^https?:\/\//i.test(href) && new URL(href).host !== Astro.url.host;
+  } catch {}
+  return external ? { href, target: '_blank', rel: 'noopener noreferrer' } : { href };
+};
+
+const pad = (n: number) => String(n).padStart(2, '0');
+const standard = [1, 2, 3, 4].map((i) => ({ title: c[`standard.item${i}.title`], text: c[`standard.item${i}.text`] }));
+const pillars = [1, 2, 3, 4].map((i) => {
+  const word = c[`formula.item${i}.word`].trim();
+  return { first: word.charAt(0), rest: word.slice(1), text: c[`formula.item${i}.text`] };
+});
+const signals = [1, 2, 3, 4, 5, 6, 7].map((i) => ({ name: c[`signals.item${i}.name`], text: c[`signals.item${i}.text`] }));
+const masterclassLive = c['masterclass.live'] === '1';
+const offers = [1, 2, 3, 4].map((i) => ({
+  tag: c[`offer${i}.tag`],
+  title: c[`offer${i}.title`],
+  subtitle: c[`offer${i}.subtitle`],
+  price: c[`offer${i}.price`],
+  lead: c[`offer${i}.lead`],
+  text: c[`offer${i}.text`],
+}));
+const guide = ['scorecard', 'playbook', 'masterclass', 'audit'].map((name, i) => ({
+  attrs: link(`guide.item${i + 1}.href`),
+  cta: `${name}-guide`,
+  quote: c[`guide.item${i + 1}.quote`],
+  answer: c[`guide.item${i + 1}.answer`],
+}));
+const bullets = c['offer4.bullets'].split(/\r?\n/).map((b) => b.trim()).filter(Boolean);
+
+// El HTML depende de la BD; se permite una caché corta en navegadores/CDN.
+Astro.response.headers.set('Cache-Control', 'public, max-age=60');
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{c['site.title']}</title>
+    <meta name="description" content={c['site.description']} />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={c['og.title']} />
+    <meta property="og:description" content={c['og.description']} />
+    <meta property="og:image" content={new URL(c['hero.image'], Astro.url).href} />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="preload" as="image" href={c['hero.image']} />
+  </head>
+  <body>
+    <div id="seen-hub">
+      <header class="site-header">
+        <a {...link('header.logo.href')}><img src={c['header.logo']} alt="JT Maison" width="400" height="253" /></a>
+        <div class="site-header__tagline">{c['header.tagline']}</div>
+      </header>
+
+      <main>
+        <!-- 01 Hero -->
+        <section class="hero">
+          <div class="hero__copy">
+            <div class="wordmark">{c['hero.wordmark']}<span class="wordmark__diamond" aria-hidden="true"></span></div>
+            <div class="hero__body">
+              <h1><Lines text={c['hero.title']} /></h1>
+              <p class="hero__text"><Lines text={c['hero.text']} /></p>
+              <div class="cta-row">
+                <a class="btn" {...link('hero.ctaPrimary.href')} data-cta="scorecard-hero">{c['hero.ctaPrimary']}</a>
+                <a class="link" {...link('hero.ctaSecondary.href')} data-cta="audit-hero">{c['hero.ctaSecondary']}</a>
+              </div>
+            </div>
+          </div>
+          <div class="media-fill hero__media">
+            <img src={c['hero.image']} alt={c['hero.imageAlt']} fetchpriority="high" />
+          </div>
+        </section>
+
+        <!-- 02 Idea central -->
+        <section class="section section--boxed idea">
+          <div class="grid-2">
+            <div>
+              <div class="eyebrow">{c['idea.eyebrow']}</div>
+              <h2 class="h-display"><Lines text={c['idea.title']} /></h2>
+            </div>
+            <div class="body-copy"><Prose text={c['idea.body']} /></div>
+          </div>
+          <div class="idea__feature">
+            <div>
+              <img src={c['idea.image']} alt={c['idea.imageAlt']} loading="lazy" />
+            </div>
+            <div>
+              <blockquote class="idea__quote"><Lines text={c['idea.quote']} /></blockquote>
+            </div>
+          </div>
+          <div class="cta-row">
+            <a class="btn" {...link('idea.ctaPrimary.href')} data-cta="scorecard-idea">{c['idea.ctaPrimary']}</a>
+            <a class="link" {...link('idea.ctaSecondary.href')} data-cta="audit-idea">{c['idea.ctaSecondary']}</a>
+          </div>
+        </section>
+
+        <!-- 03 SEEN. Standard -->
+        <section class="section standard">
+          <div class="wrap">
+            <div class="eyebrow">{c['standard.eyebrow']}</div>
+            <div class="standard__list">
+              {
+                standard.map((item, i) => (
+                  <div class="standard__row">
+                    <div class="standard__word">
+                      <span class="num">{pad(i + 1)}</span>
+                      <span class="serif">{item.title}</span>
+                    </div>
+                    <p><Lines text={item.text} /></p>
+                  </div>
+                ))
+              }
+            </div>
+            <div class="grid-2 standard__closing">
+              <div class="standard__closing-copy"><Prose text={c['standard.closing']} /></div>
+              <div class="cta-row">
+                <a class="btn btn--orange" {...link('standard.cta.href')} data-cta="scorecard-standard">{c['standard.cta']}</a>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 04 SEEN. Formula -->
+        <section class="section formula">
+          <div class="wrap">
+            <div class="grid-2">
+              <div>
+                <div class="eyebrow eyebrow--ink">{c['formula.eyebrow']}</div>
+                <h2 class="h-display h-display--xl">
+                  {pillars.map((p, i) => (
+                    <Fragment>
+                      {i > 0 && <br />}
+                      <span class="hl">{p.first}</span>{p.rest}.
+                    </Fragment>
+                  ))}
+                </h2>
+              </div>
+              <p class="formula__intro"><Lines text={c['formula.intro']} /></p>
+            </div>
+            <div class="formula__pillars">
+              {
+                pillars.map((p) => (
+                  <div class="formula__pillar">
+                    <div class="formula__pillar-title">
+                      <span class="hl">{p.first}</span>
+                      {p.rest}
+                    </div>
+                    <p><Lines text={p.text} /></p>
+                  </div>
+                ))
+              }
+            </div>
+            <div class="cta-row">
+              <a class="btn btn--invert" {...link('formula.cta.href')} data-cta="masterclass-formula">{c['formula.cta']}</a>
+            </div>
+          </div>
+        </section>
+
+        <!-- 05 Seven signals -->
+        <section class="section signals">
+          <div class="wrap">
+            <h2 class="h-display"><Lines text={c['signals.title']} /></h2>
+            <div class="signals__list">
+              {
+                signals.map((s, i) =>
+                  i % 2 === 0 ? (
+                    <div class="signal">
+                      <div class="signal__num">{pad(i + 1)}</div>
+                      <div class="signal__name">{s.name}</div>
+                      <div class="signal__text">{s.text}</div>
+                    </div>
+                  ) : (
+                    <div class="signal signal--even">
+                      <div class="signal__name">{s.name}</div>
+                      <div class="signal__text">{s.text}</div>
+                      <div class="signal__num">{pad(i + 1)}</div>
+                    </div>
+                  ),
+                )
+              }
+            </div>
+            <div class="cta-row">
+              <a class="btn" {...link('signals.ctaPrimary.href')} data-cta="scorecard-signals">{c['signals.ctaPrimary']}</a>
+              <a class="link" {...link('signals.ctaSecondary.href')} data-cta="playbook-signals">{c['signals.ctaSecondary']}</a>
+            </div>
+          </div>
+        </section>
+
+        <!-- 06 Four ways in -->
+        <section class="section section--boxed ways" id="ways-in">
+          <div class="grid-2">
+            <div>
+              <div class="eyebrow">{c['ways.eyebrow']}</div>
+              <h2 class="h-display h-display--xl"><Lines text={c['ways.title']} /></h2>
+            </div>
+            <div class="ways__intro"><Prose text={c['ways.intro']} /></div>
+          </div>
+
+          <div class="offers">
+            {
+              offers.slice(0, 3).map((o, i) => (
+                <article class="offer">
+                  <div class="offer__head">
+                    <div class="offer__tag">
+                      <span>{pad(i + 1)}</span>
+                      <span>{o.tag}</span>
+                    </div>
+                    <h3>
+                      <Lines text={o.title} />
+                      {o.subtitle && <span class="offer__subtitle">{o.subtitle}</span>}
+                    </h3>
+                    <div class="offer__price-row">
+                      <div class="offer__price">{o.price}</div>
+                      {i === 2 && !masterclassLive && (
+                        <div class="offer__availability">AVAILABLE {c['masterclass.releaseDate']}</div>
+                      )}
+                    </div>
+                  </div>
+                  <div class="offer__body">
+                    <p class="offer__lead"><Lines text={o.lead} /></p>
+                    <Prose text={o.text} class="offer__text" />
+                  </div>
+                  <div class="offer__action">
+                    {i === 0 && <a class="link" {...link('offer1.cta.href')} data-cta="scorecard-offer">{c['offer1.cta']}</a>}
+                    {i === 1 && <a class="link" {...link('offer2.cta.href')} data-cta="playbook-offer">{c['offer2.cta']}</a>}
+                    {i === 2 && (
+                      <a class="link" {...link('masterclass.cta.href')} data-cta="masterclass-offer">
+                        {masterclassLive ? c['masterclass.ctaLive'] : c['masterclass.ctaPresale']}
+                      </a>
+                    )}
+                  </div>
+                </article>
+              ))
+            }
+            <article class="offer offer--dark">
+              <div class="offer__head">
+                <div class="offer__tag"><span>04</span><span>{offers[3].tag}</span></div>
+                <h3>
+                  <Lines text={offers[3].title} />
+                  {offers[3].subtitle && <span class="offer__subtitle">{offers[3].subtitle}</span>}
+                </h3>
+                <div class="offer__price">{offers[3].price}</div>
+              </div>
+              <div class="offer__body">
+                <p class="offer__lead"><Lines text={offers[3].lead} /></p>
+                <Prose text={offers[3].text} class="offer__text" />
+              </div>
+              <div class="offer__action">
+                <ul class="offer__bullets">{bullets.map((b) => <li>{b}</li>)}</ul>
+                <a class="btn btn--outline" {...link('offer4.cta.href')} data-cta="audit-offer">{c['offer4.cta']}</a>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <!-- 07 Decision guide -->
+        <section class="section section--boxed guide">
+          <h2 class="h-display"><Lines text={c['guide.title']} /></h2>
+          <div class="guide__list">
+            {
+              guide.map((g) => (
+                <a class="guide__item" {...g.attrs} data-cta={g.cta}>
+                  <span class="guide__quote">{g.quote}</span>
+                  <span class="guide__answer">
+                    <span>→</span> {g.answer}
+                  </span>
+                </a>
+              ))
+            }
+          </div>
+        </section>
+
+        <!-- 08 Audit feature -->
+        <section class="audit">
+          <div class="media-fill audit__media">
+            <img src={c['audit.image']} alt={c['audit.imageAlt']} loading="lazy" />
+          </div>
+          <div class="audit__copy">
+            <div class="eyebrow">{c['audit.eyebrow']}</div>
+            <h2 class="h-display"><Lines text={c['audit.title']} /></h2>
+            <div class="audit__text"><Prose text={c['audit.text']} /></div>
+            <div class="serif audit__highlight"><Lines text={c['audit.highlight']} /></div>
+            <a class="btn btn--orange" {...link('audit.cta.href')} data-cta="audit-feature">{c['audit.cta']}</a>
+          </div>
+        </section>
+
+        <!-- 09 Borrowed reach -->
+        <section class="section reach">
+          <div class="wrap grid-2">
+            <div>
+              <h2 class="serif"><Lines text={c['reach.title']} /></h2>
+            </div>
+            <div class="body-copy">
+              <Prose text={c['reach.text']} />
+              <div class="cta-row">
+                <a class="btn" {...link('reach.ctaPrimary.href')} data-cta="scorecard-insight">{c['reach.ctaPrimary']}</a>
+                <a class="link" {...link('reach.ctaSecondary.href')} data-cta="playbook-insight">{c['reach.ctaSecondary']}</a>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 10 JT Maison -->
+        <section class="section section--boxed grid-2 about">
+          <div>
+            <img src={c['header.logo']} alt="JT Maison" loading="lazy" width="400" height="253" />
+            <h2 class="h-display"><Lines text={c['about.title']} /></h2>
+          </div>
+          <div class="body-copy">
+            <Prose text={c['about.text']} />
+            <Prose text={c['about.small']} class="about__small" />
+            <a class="link" {...link('about.cta.href')} data-cta="jtmaison">{c['about.cta']}</a>
+          </div>
+        </section>
+
+        <!-- 11 Final CTA -->
+        <section class="final">
+          <div class="final__copy">
+            <h2 class="serif"><Lines text={c['final.title']} /></h2>
+            <p class="final__text"><Lines text={c['final.text']} /></p>
+            <div class="cta-row">
+              <a class="btn btn--invert" {...link('final.ctaPrimary.href')} data-cta="scorecard-final">{c['final.ctaPrimary']}</a>
+              <a class="link" {...link('final.ctaSecondary.href')} data-cta="audit-final">{c['final.ctaSecondary']}</a>
+            </div>
+          </div>
+          <div class="media-fill final__media">
+            <img src={c['final.image']} alt={c['final.imageAlt']} loading="lazy" />
+          </div>
+        </section>
+      </main>
+
+      {
+        c['sticky.enabled'] === '1' && (
+          <a class="sticky-cta" {...link('sticky.href')} data-cta="scorecard-sticky" data-sticky-cta>
+            {c['sticky.label']}
+          </a>
+        )
+      }
+    </div>
+
+    <script>
+      // CTA flotante: aparece tras 700px de scroll
+      const sticky = document.querySelector<HTMLElement>('[data-sticky-cta]');
+      if (sticky) {
+        const update = () => sticky.classList.toggle('is-visible', window.scrollY > 700);
+        window.addEventListener('scroll', update, { passive: true });
+        update();
+      }
+
+      // Conserva los parámetros utm_* de la URL en los enlaces salientes de los CTA
+      const params = new URLSearchParams(window.location.search);
+      const utmKeys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'].filter((k) => params.has(k));
+      if (utmKeys.length) {
+        document.querySelectorAll<HTMLAnchorElement>('#seen-hub a[data-cta]').forEach((a) => {
+          const href = a.getAttribute('href');
+          if (!href || href.startsWith('#')) return;
+          try {
+            const u = new URL(href, window.location.href);
+            utmKeys.forEach((k) => {
+              if (!u.searchParams.has(k)) u.searchParams.set(k, params.get(k)!);
+            });
+            a.setAttribute('href', u.toString());
+          } catch {}
+        });
+      }
+    </script>
+  </body>
+</html>

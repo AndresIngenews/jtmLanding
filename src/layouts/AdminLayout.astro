@@ -1,0 +1,70 @@
+---
+import '../styles/admin.css';
+import { SECTIONS } from '../lib/content-schema';
+import type { Flash } from '../lib/flash';
+
+interface Props {
+  title: string;
+  flash?: Flash | null;
+}
+const { title, flash } = Astro.props;
+const user = Astro.locals.user;
+const path = Astro.url.pathname.replace(/\/$/, '');
+const current = (href: string) => (path === href ? 'page' : undefined);
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>{title} · Admin</title>
+    <link rel="icon" type="image/png" href="/favicon.png" />
+  </head>
+  <body>
+    <div class="admin">
+      <aside class="sidebar">
+        <div class="sidebar__brand">Admin landing</div>
+        <nav>
+          <a href="/admin" aria-current={current('/admin')}>Dashboard</a>
+          <span class="sidebar__label">Content</span>
+          {SECTIONS.map((s) => <a href={`/admin/sections/${s.id}`} aria-current={current(`/admin/sections/${s.id}`)}>{s.label}</a>)}
+          <span class="sidebar__label">Tools</span>
+          <a href="/admin/media" aria-current={current('/admin/media')}>Images</a>
+          <a href="/admin/history" aria-current={current('/admin/history')}>History</a>
+          <a href="/admin/account" aria-current={current('/admin/account')}>My account</a>
+          <a href="/" target="_blank" rel="noopener">View site ↗</a>
+        </nav>
+        {
+          user && (
+            <div class="sidebar__footer">
+              <span>
+                Signed in as <strong>{user.name || user.username}</strong>
+              </span>
+              <form method="post" action="/admin/logout">
+                <button class="btn btn--small btn--ghost" style="color:inherit;border-color:currentColor" type="submit">
+                  Sign out
+                </button>
+              </form>
+            </div>
+          )
+        }
+      </aside>
+      <main class="main">
+        {flash && (
+          <div class={`alert alert--${flash.type}`} role={flash.type === 'err' ? 'alert' : 'status'}>
+            {flash.text}
+          </div>
+        )}
+        <slot />
+      </main>
+    </div>
+    <script>
+      document.addEventListener('submit', (e) => {
+        const form = e.target as HTMLFormElement;
+        if (form.dataset.confirm && !window.confirm(form.dataset.confirm)) e.preventDefault();
+      });
+    </script>
+  </body>
+</html>

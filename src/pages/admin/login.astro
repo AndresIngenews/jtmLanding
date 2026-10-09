@@ -1,0 +1,64 @@
+---
+import '../../styles/admin.css';
+import { createSession, isLockedOut, setSessionCookie, verifyCredentials } from '../../lib/auth';
+
+const rawNext = Astro.url.searchParams.get('next') ?? '/admin';
+// Solo se permite redirigir dentro del panel
+const next = /^\/admin(\/|$|\?)/.test(rawNext) ? rawNext : '/admin';
+
+if (Astro.locals.user) return Astro.redirect(next);
+
+let error = '';
+let username = '';
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  username = String(form.get('username') ?? '').trim();
+  const password = String(form.get('password') ?? '');
+  const ip = Astro.clientAddress;
+
+  if (!username || !password) {
+    error = 'Enter your username and password.';
+  } else if (await isLockedOut(username, ip)) {
+    error = 'Too many failed attempts. Please wait 15 minutes and try again.';
+  } else {
+    const user = await verifyCredentials(username, password, ip);
+    if (user) {
+      const token = await createSession(user.id, ip, Astro.request.headers.get('user-agent') ?? '');
+      setSessionCookie(Astro.cookies, token, Astro.url.protocol === 'https:');
+      return Astro.redirect(next);
+    }
+    error = 'Incorrect username or password.';
+  }
+  Astro.response.status = 401;
+}
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Sign in · Admin</title>
+    <link rel="icon" type="image/png" href="/favicon.png" />
+  </head>
+  <body>
+    <div class="login">
+      <form class="login__card" method="post">
+        <h1>Admin panel</h1>
+        <p>Sign in to edit the text and images of the landing page.</p>
+        {error && <div class="alert alert--err" role="alert">{error}</div>}
+        <div class="field">
+          <label for="username">Username</label>
+          <input id="username" name="username" type="text" autocomplete="username" required autofocus value={username} />
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <input id="password" name="password" type="password" autocomplete="current-password" required />
+        </div>
+        <button class="btn" type="submit">Sign in</button>
+      </form>
+    </div>
+  </body>
+</html>

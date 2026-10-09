@@ -1,0 +1,76 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { FIELDS } from '../../lib/content-schema';
+import { getRevision, getRevisions, saveContent } from '../../lib/content';
+import { setFlash, takeFlash } from '../../lib/flash';
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const revision = await getRevision(Number(form.get('id')));
+  if (revision && revision.old_value !== null && FIELDS.has(revision.content_key)) {
+    await saveContent({ [revision.content_key]: revision.old_value }, Astro.locals.user!.id);
+    setFlash(Astro.cookies, 'ok', `Restored the previous value of "${FIELDS.get(revision.content_key)!.label}".`);
+  } else {
+    setFlash(Astro.cookies, 'err', 'That change could not be restored.');
+  }
+  return Astro.redirect('/admin/history', 303);
+}
+
+const flash = takeFlash(Astro.cookies);
+const revisions = await getRevisions(200);
+const fmt = new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
+const short = (v: string | null) => (v === null ? '—' : v.length > 200 ? v.slice(0, 200) + '…' : v);
+---
+
+<AdminLayout title="History" flash={flash}>
+  <div class="page-head">
+    <div>
+      <h1>Change history</h1>
+      <p>Last 200 changes. You can revert any field to its previous value.</p>
+    </div>
+  </div>
+  <div class="card" style="overflow-x:auto">
+    {
+      revisions.length === 0 ? (
+        <p class="muted">No changes recorded yet.</p>
+      ) : (
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Field</th>
+              <th>Before</th>
+              <th>After</th>
+              <th>User</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {revisions.map((r) => (
+              <tr>
+                <td style="white-space:nowrap">{fmt.format(new Date(r.created_at))}</td>
+                <td>
+                  {FIELDS.get(r.content_key)?.label ?? r.content_key}
+                  <div class="help">{r.content_key}</div>
+                </td>
+                <td class="value old">{short(r.old_value)}</td>
+                <td class="value">{short(r.new_value)}</td>
+                <td>{r.username ?? '—'}</td>
+                <td>
+                  {r.old_value !== null && (
+                    <form method="post" data-confirm="Restore the previous value?">
+                      <input type="hidden" name="id" value={r.id} />
+                      <button class="btn btn--small btn--ghost" type="submit">
+                        Restore
+                      </button>
+                    </form>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )
+    }
+  </div>
+</AdminLayout>

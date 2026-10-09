@@ -1,0 +1,15 @@
+---
+// Texto en una sola pieza: los saltos de línea se convierten en <br> y **texto** en negrita.
+import { toSegments } from '../lib/content';
+
+interface Props {
+  text: string;
+}
+const lines = Astro.props.text.replace(/\r\n/g, '\n').split('\n');
+---
+{lines.map((line, i) => (
+  <Fragment>
+    {i > 0 && <br />}
+    {toSegments(line).map((s) => (s.bold ? <strong>{s.text}</strong> : s.text))}
+  </Fragment>
+))}

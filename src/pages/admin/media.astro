@@ -1,0 +1,82 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { setFlash, takeFlash } from '../../lib/flash';
+import { UploadError, deleteMedia, listMedia, mediaUrl, saveUpload } from '../../lib/media';
+
+const user = Astro.locals.user!;
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  try {
+    if (form.get('action') === 'delete') {
+      await deleteMedia(Number(form.get('id')));
+      setFlash(Astro.cookies, 'ok', 'Image deleted.');
+    } else {
+      const files = form.getAll('files').filter((f): f is File => f instanceof File && f.size > 0);
+      if (!files.length) throw new UploadError('Select at least one image.');
+      for (const file of files) await saveUpload(file, user.id, String(form.get('alt') ?? ''));
+      setFlash(Astro.cookies, 'ok', `${files.length} image(s) uploaded.`);
+    }
+  } catch (err) {
+    if (!(err instanceof UploadError)) console.error(err);
+    setFlash(Astro.cookies, 'err', err instanceof UploadError ? err.message : 'The operation could not be completed.');
+  }
+  return Astro.redirect('/admin/media', 303);
+}
+
+const flash = takeFlash(Astro.cookies);
+const media = await listMedia();
+const kb = (n: number) => `${Math.round(n / 1024)} KB`;
+const shortName = (n: string) => (n.length > 28 ? n.slice(0, 28) + '…' : n);
+---
+
+<AdminLayout title="Images" flash={flash}>
+  <div class="page-head">
+    <div>
+      <h1>Image library</h1>
+      <p>Images are optimised automatically (WebP, max. 2400px). You can then assign them from each section.</p>
+    </div>
+  </div>
+
+  <form class="card" method="post" enctype="multipart/form-data">
+    <div class="field">
+      <label for="files">Upload images</label>
+      <input id="files" type="file" name="files" multiple required accept="image/jpeg,image/png,image/webp,image/gif,image/avif" />
+    </div>
+    <div class="field">
+      <label for="alt">Alt text (optional)</label>
+      <input id="alt" type="text" name="alt" maxlength="255" />
+    </div>
+    <button class="btn" type="submit">Upload</button>
+  </form>
+
+  <div style="margin-top:24px">
+    {
+      media.length === 0 ? (
+        <p class="muted">No images have been uploaded yet.</p>
+      ) : (
+        <div class="media-grid">
+          {media.map((m) => (
+            <div class="media-item">
+              <a href={mediaUrl(m.filename)} target="_blank" rel="noopener">
+                <img src={mediaUrl(m.filename)} alt={m.alt_text} loading="lazy" />
+              </a>
+              <div class="media-item__meta">
+                <strong title={m.original_name}>{shortName(m.original_name)}</strong>
+                <span class="muted">
+                  {m.width}×{m.height} · {kb(m.size_bytes)}
+                </span>
+                <code>{mediaUrl(m.filename)}</code>
+                <form method="post" data-confirm="Delete this image?">
+                  <input type="hidden" name="action" value="delete" />
+                  <input type="hidden" name="id" value={m.id} />
+                  <button class="btn btn--small btn--danger" type="submit">Delete</button>
+                </form>
+              </div>
+            </div>
+          ))}
+        </div>
+      )
+    }
+  </div>
+</AdminLayout>

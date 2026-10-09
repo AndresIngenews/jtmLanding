@@ -1,0 +1,225 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { FIELDS, SHARED_LINKS, getSection, resolveHref } from '../../../lib/content-schema';
+import { getContent, saveContent } from '../../../lib/content';
+import { setFlash, takeFlash } from '../../../lib/flash';
+import { UploadError, listMedia, mediaUrl, saveUpload } from '../../../lib/media';
+import { normalizeField } from '../../../lib/validate';
+
+const CUSTOM = '__custom';
+const section = getSection(Astro.params.id ?? '');
+if (!section) return new Response('Section not found', { status: 404 });
+
+const user = Astro.locals.user!;
+let values = await getContent();
+const errors: Record<string, string> = {};
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const submitted: Record<string, string> = {};
+
+  for (const field of section.fields) {
+    let raw = form.get(field.key);
+    if (field.type === 'link' && raw === CUSTOM) raw = form.get(`custom:${field.key}`);
+    if (field.type === 'image') {
+      const file = form.get(`upload:${field.key}`);
+      if (file instanceof File && file.size > 0) {
+        try {
+          const media = await saveUpload(file, user.id, String(form.get(`${field.key.replace(/\.image$/, '')}.imageAlt`) ?? ''));
+          raw = mediaUrl(media.filename);
+        } catch (err) {
+          errors[field.key] = err instanceof UploadError ? err.message : 'The image could not be processed.';
+          if (!(err instanceof UploadError)) console.error(err);
+          continue;
+        }
+      }
+    }
+    const result = normalizeField(field, raw);
+    if (result.ok) submitted[field.key] = result.value;
+    else errors[field.key] = result.error;
+  }
+
+  if (Object.keys(errors).length === 0) {
+    const changed = await saveContent(submitted, user.id);
+    setFlash(Astro.cookies, 'ok', changed ? `Saved: ${changed} field(s) updated.` : 'There were no changes to save.');
+    return Astro.redirect(Astro.url.pathname, 303);
+  }
+  // Se vuelven a mostrar los valores enviados para no perder lo escrito
+  values = { ...values, ...submitted };
+  for (const key of Object.keys(errors)) {
+    const type = FIELDS.get(key)?.type;
+    const raw = type === 'link' && form.get(key) === CUSTOM ? form.get(`custom:${key}`) : form.get(key);
+    if (typeof raw === 'string' && type !== 'image') values[key] = raw;
+  }
+  Astro.response.status = 422;
+}
+
+const flash = Object.keys(errors).length
+  ? { type: 'err' as const, text: 'Please fix the highlighted fields; no changes were saved.' }
+  : takeFlash(Astro.cookies);
+
+const hasImages = section.fields.some((f) => f.type === 'image');
+const media = hasImages ? await listMedia() : [];
+const builtIn = [...new Set([...FIELDS.values()].filter((f) => f.type === 'image').map((f) => f.default))];
+const library = [...media.map((m) => ({ url: mediaUrl(m.filename), name: m.original_name })), ...builtIn.map((url) => ({ url, name: url }))];
+---
+
+<AdminLayout title={section.label} flash={flash}>
+  <div class="page-head">
+    <div>
+      <h1>{section.label}</h1>
+      {section.description && <p>{section.description}</p>}
+    </div>
+    <a class="btn btn--ghost" href="/" target="_blank" rel="noopener">View site ↗</a>
+  </div>
+
+  <form method="post" enctype="multipart/form-data">
+    <div class="card">
+      {
+        section.fields.map((field) => {
+          const id = `f-${field.key.replace(/\W/g, '-')}`;
+          const value = values[field.key] ?? '';
+          const error = errors[field.key];
+          return (
+            <div class="field">
+              {field.type === 'boolean' ? (
+                <label class="checkbox">
+                  <input type="checkbox" name={field.key} value="1" checked={value === '1'} />
+                  {field.label}
+                </label>
+              ) : (
+                <label for={id}>
+                  {field.label}
+                  <span class="key">{field.key}</span>
+                </label>
+              )}
+
+              {field.type === 'text' && <input id={id} name={field.key} type="text" value={value} />}
+              {field.type === 'url' && <input id={id} name={field.key} type="text" inputmode="url" value={value} />}
+              {field.type === 'link' && (
+                <div class="link-field" data-link-field>
+                  <select id={id} name={field.key} data-link-mode>
+                    {Object.entries(SHARED_LINKS).map(([k, name]) => (
+                      <option value={`@${k}`} selected={value === `@${k}`} data-href={values[`links.${k}`]}>
+                        Shared link: {name} — {values[`links.${k}`]}
+                      </option>
+                    ))}
+                    <option value={CUSTOM} selected={!value.startsWith('@')}>
+                      Custom URL…
+                    </option>
+                  </select>
+                  <input
+                    type="text"
+                    inputmode="url"
+                    name={`custom:${field.key}`}
+                    value={value.startsWith('@') ? '' : value}
+                    placeholder="https://… · mailto:… · tel:… · #section · /path"
+                    aria-label={`${field.label} (custom URL)`}
+                    hidden={value.startsWith('@')}
+                    data-link-custom
+                  />
+                  <span class="help">
+                    Currently links to: <code data-link-current>{resolveHref(values, value)}</code>
+                  </span>
+                </div>
+              )}
+              {field.type === 'textarea' && (
+                <textarea id={id} name={field.key} rows={Math.min(14, Math.max(3, value.split('\n').length + 1))}>{value}</textarea>
+              )}
+              {field.type === 'image' && (
+                <div class="image-field" data-image-field>
+                  <img class="image-field__preview" src={value} alt="" data-preview />
+                  <div class="image-field__controls">
+                    <input id={id} name={field.key} type="text" value={value} data-path />
+                    <div>
+                      <span class="help">Upload a new image (JPG, PNG, WebP, GIF or AVIF):</span>
+                      <input type="file" name={`upload:${field.key}`} accept="image/jpeg,image/png,image/webp,image/gif,image/avif" data-file />
+                    </div>
+                    {library.length > 0 && (
+                      <details>
+                        <summary>Choose from library ({library.length})</summary>
+                        <div class="library">
+                          {library.map((item) => (
+                            <button type="button" data-pick={item.url} title={item.name}>
+                              <img src={item.url} alt={item.name} loading="lazy" />
+                            </button>
+                          ))}
+                        </div>
+                      </details>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {field.help && <span class="help">{field.help}</span>}
+              {error && (
+                <span class="help" style="color:var(--err);font-weight:600">
+                  {error}
+                </span>
+              )}
+              {value !== field.default && field.type !== 'boolean' && (
+                <details>
+                  <summary class="help">Show original design value</summary>
+                  <pre class="help" style="white-space:pre-wrap;margin:6px 0 0">
+                    {field.type === 'link' ? `Shared link: ${SHARED_LINKS[field.default.slice(1) as keyof typeof SHARED_LINKS]}` : field.default}
+                  </pre>
+                </details>
+              )}
+            </div>
+          );
+        })
+      }
+    </div>
+    <div class="save-bar">
+      <button class="btn" type="submit">Save changes</button>
+      <a class="btn btn--ghost" href={Astro.url.pathname}>Discard</a>
+    </div>
+  </form>
+</AdminLayout>
+
+<script>
+  document.querySelectorAll<HTMLElement>('[data-image-field]').forEach((wrap) => {
+    const preview = wrap.querySelector<HTMLImageElement>('[data-preview]')!;
+    const path = wrap.querySelector<HTMLInputElement>('[data-path]')!;
+    const file = wrap.querySelector<HTMLInputElement>('[data-file]')!;
+
+    path.addEventListener('change', () => (preview.src = path.value));
+    file.addEventListener('change', () => {
+      const f = file.files?.[0];
+      if (f) preview.src = URL.createObjectURL(f);
+    });
+    wrap.querySelectorAll<HTMLButtonElement>('[data-pick]').forEach((btn) =>
+      btn.addEventListener('click', () => {
+        path.value = btn.dataset.pick!;
+        preview.src = path.value;
+        file.value = '';
+        btn.closest('details')?.removeAttribute('open');
+      }),
+    );
+  });
+
+  document.querySelectorAll<HTMLElement>('[data-link-field]').forEach((wrap) => {
+    const mode = wrap.querySelector<HTMLSelectElement>('[data-link-mode]')!;
+    const custom = wrap.querySelector<HTMLInputElement>('[data-link-custom]')!;
+    const current = wrap.querySelector<HTMLElement>('[data-link-current]')!;
+    const update = () => {
+      const isCustom = mode.value === '__custom';
+      custom.hidden = !isCustom;
+      current.textContent = isCustom ? custom.value || '—' : (mode.selectedOptions[0].dataset.href ?? '');
+    };
+    mode.addEventListener('change', () => {
+      update();
+      if (!custom.hidden) custom.focus();
+    });
+    custom.addEventListener('input', update);
+  });
+
+  // Aviso al salir con cambios sin guardar
+  const form = document.querySelector('form[enctype]');
+  let dirty = false;
+  form?.addEventListener('input', () => (dirty = true));
+  form?.addEventListener('submit', () => (dirty = false));
+  window.addEventListener('beforeunload', (e) => {
+    if (dirty) e.preventDefault();
+  });
+</script>

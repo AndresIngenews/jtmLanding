@@ -1,0 +1,67 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { FIELDS, SECTIONS } from '../../lib/content-schema';
+import { getRevisions } from '../../lib/content';
+import { takeFlash } from '../../lib/flash';
+
+const flash = takeFlash(Astro.cookies);
+const revisions = await getRevisions(8);
+const user = Astro.locals.user!;
+const fmt = new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
+---
+
+<AdminLayout title="Dashboard" flash={flash}>
+  <div class="page-head">
+    <div>
+      <h1>Hello, {user.name || user.username}</h1>
+      <p>Choose a section to edit its text and images. Changes go live as soon as you save.</p>
+    </div>
+    <a class="btn btn--ghost" href="/" target="_blank" rel="noopener">View site ↗</a>
+  </div>
+
+  <div class="grid-cards">
+    {
+      SECTIONS.map((s) => (
+        <a class="section-card" href={`/admin/sections/${s.id}`}>
+          <strong>{s.label}</strong>
+          <span>
+            {s.fields.length} fields · {s.fields.filter((f) => f.type === 'image').length} images
+          </span>
+        </a>
+      ))
+    }
+  </div>
+
+  <div class="card" style="margin-top:28px">
+    <div class="page-head" style="margin-bottom:8px">
+      <h2 style="font-size:18px">Recent changes</h2>
+      <a href="/admin/history">View full history →</a>
+    </div>
+    {
+      revisions.length === 0 ? (
+        <p class="muted">No content has been changed yet.</p>
+      ) : (
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Field</th>
+              <th>New value</th>
+              <th>User</th>
+              <th>Date</th>
+            </tr>
+          </thead>
+          <tbody>
+            {revisions.map((r) => (
+              <tr>
+                <td>{FIELDS.get(r.content_key)?.label ?? r.content_key}</td>
+                <td class="value">{r.new_value.length > 120 ? r.new_value.slice(0, 120) + '…' : r.new_value}</td>
+                <td>{r.username ?? '—'}</td>
+                <td>{fmt.format(new Date(r.created_at))}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )
+    }
+  </div>
+</AdminLayout>
